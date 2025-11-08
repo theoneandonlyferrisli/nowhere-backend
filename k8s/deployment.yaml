@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: link-server
+  labels:
+    app: link-server
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: link-server
+  template:
+    metadata:
+      labels:
+        app: link-server
+    spec:
+      containers:
+        - name: link-server
+          image: us-central1-docker.pkg.dev/nowhere-link-prod/nowhere-link-repo/link-server:v1
+          ports:
+            - containerPort: 8080

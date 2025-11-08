@@ -1,0 +1,25 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: link-server-ingress
+  annotations:
+    kubernetes.io/ingress.class: "gce"  # Use GCE HTTP(S) Load Balancer
+    networking.gke.io/managed-certificates: "links-nowhereapp-cert"
+    kubernetes.io/ingress.global-static-ip-name: "links-nowhereapp-ip"
+spec:
+  rules:
+    - host: links.nowhereapp.ai
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: link-server-svc
+                port:
+                  number: 80
+  defaultBackend:
+    service:
+      name: link-server-svc
+      port:
+        number: 80
