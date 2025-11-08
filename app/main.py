@@ -1,15 +1,11 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from google.cloud import firestore
 from pathlib import Path
 import random
+import httpx
 
 app = FastAPI()
-
-# Firestore client:
-# Uses Application Default Credentials (Workload Identity on GKE)
-db = firestore.Client()
 
 LANDING_DOMAIN = "https://nowhereapp.ai"
 LINKS_DOMAIN = "https://links.nowhereapp.ai"
@@ -54,7 +50,7 @@ def get_host(request: Request) -> str:
 def landing(request: Request):
     host = get_host(request)
     
-    # If accessed via links.nowhereapp.ai, redirect to landing domain
+    # Redirect links.nowhereapp.ai to landing domain
     if "links.nowhereapp.ai" in host:
         return RedirectResponse(url=LANDING_DOMAIN, status_code=302)
     
@@ -130,9 +126,10 @@ def aasa():
     }
     return JSONResponse(content=payload, media_type="application/json")
 
-# Error page for invalid profile access
+# Profile routes - only on nowhereapp.ai
 @app.api_route("/profile", methods=["GET", "HEAD"], response_class=HTMLResponse)
 def profile_no_id():
+    """Error page for profile access without ID"""
     error_path = static_dir / "error.html"
     if error_path.exists():
         return FileResponse(error_path, media_type="text/html", status_code=400)
@@ -180,58 +177,174 @@ def profile_no_id():
     )
 
 @app.api_route("/profile/{profile_id}", methods=["GET", "HEAD"], response_class=HTMLResponse)
-def user_profile(profile_id: str):
-    """Serve user profile page"""
+async def user_profile(profile_id: str):
+    """Serve user profile page on nowhereapp.ai with dynamic OG tags"""
     profile_path = static_dir / "profile.html"
+    
     if profile_path.exists():
+        # Read the HTML template
+        with open(profile_path, 'r', encoding='utf-8') as f:
+            html_content = f.read()
+        
+        # For test profile, inject static OG tags
+        if profile_id.lower() == "test":
+            first_name = "John"
+            countries_count = 5
+            cities_count = 8
+            places_count = 8
+            profile_pic_url = get_random_og_image()  # Use random thumbnail if no profile pic
+            
+            og_title = f"{first_name}'s nowhere passport"
+            og_description = f"{countries_count} countries • {cities_count} cities • {places_count} places"
+            og_url = f"{LANDING_DOMAIN}/profile/{profile_id}"
+            
+            # Inject OG tags - replace the entire OG tags block
+            og_tags = f'''<!-- OG Tags Placeholder - Will be injected by server -->
+    <meta property="og:type" content="profile" />
+    <meta property="og:title" content="{escape(og_title)}" />
+    <meta property="og:description" content="{escape(og_description)}" />
+    <meta property="og:image" content="{profile_pic_url}" />
+    <meta property="og:url" content="{og_url}" />
+    
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="{escape(og_title)}" />
+    <meta name="twitter:description" content="{escape(og_description)}" />
+    <meta name="twitter:image" content="{profile_pic_url}" />'''
+            
+            # Replace the entire OG tags block (from comment through all meta tags)
+            html_content = html_content.replace(
+                '''<!-- OG Tags Placeholder - Will be injected by server -->
+    <meta property="og:type" content="profile" />
+    <meta property="og:title" content="nowhere passport" />
+    <meta property="og:description" content="Explore the world with nowhere" />
+    <meta property="og:image" content="" />
+    <meta property="og:url" content="" />
+    
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="nowhere passport" />
+    <meta name="twitter:description" content="Explore the world with nowhere" />
+    <meta name="twitter:image" content="" />''',
+                og_tags
+            )
+            
+            return HTMLResponse(content=html_content, media_type="text/html")
+        
+        # For real profiles, fetch via Cloud Function API (same as frontend)
+        try:
+            cloud_function_url = "https://us-central1-steps-d1514.cloudfunctions.net/getUserProfile"
+            
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(
+                    cloud_function_url,
+                    params={"id": profile_id}
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    
+                    if data.get("success") and data.get("profile"):
+                        u = data["profile"]
+                        first_name = (u.get("firstName", "") or "").strip()
+                        
+                        # Get counts
+                        countries_count = len(u.get("visitedCountries", []))
+                        cities_count = len(u.get("visitedCities", []))
+                        
+                        # Normalize places count
+                        places_count = 0
+                        visited_pois = u.get("visitedPois", [])
+                        if isinstance(visited_pois, list):
+                            places_count = len(visited_pois)
+                        elif isinstance(visited_pois, dict):
+                            places_count = len(visited_pois)
+                        
+                        # Use profile picture if available, otherwise random thumbnail
+                        profile_pic_url = (u.get("profilePictureUrl", "") or "").strip()
+                        if profile_pic_url.startswith('//'):
+                            profile_pic_url = f"https:{profile_pic_url}"
+                        
+                        # For Google profile pictures, increase size to 1200px for better OG images
+                        if profile_pic_url and 'googleusercontent.com' in profile_pic_url:
+                            # Replace size parameter (e.g., s96-c) with s1200 for high-res OG image
+                            import re
+                            profile_pic_url = re.sub(r'=s\d+-c$', '=s1200', profile_pic_url)
+                        
+                        if not profile_pic_url:
+                            profile_pic_url = get_random_og_image()
+                        
+                        og_title = f"{first_name}'s nowhere passport"
+                        og_description = f"{countries_count} countries • {cities_count} cities • {places_count} places"
+                        og_url = f"{LANDING_DOMAIN}/profile/{profile_id}"
+                        
+                        # Inject OG tags - replace the entire OG tags block
+                        og_tags = f'''<!-- OG Tags Placeholder - Will be injected by server -->
+    <meta property="og:type" content="profile" />
+    <meta property="og:title" content="{escape(og_title)}" />
+    <meta property="og:description" content="{escape(og_description)}" />
+    <meta property="og:image" content="{profile_pic_url}" />
+    <meta property="og:url" content="{og_url}" />
+    
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="{escape(og_title)}" />
+    <meta name="twitter:description" content="{escape(og_description)}" />
+    <meta name="twitter:image" content="{profile_pic_url}" />'''
+                        
+                        # Replace the entire OG tags block (from comment through all meta tags)
+                        html_content = html_content.replace(
+                            '''<!-- OG Tags Placeholder - Will be injected by server -->
+    <meta property="og:type" content="profile" />
+    <meta property="og:title" content="nowhere passport" />
+    <meta property="og:description" content="Explore the world with nowhere" />
+    <meta property="og:image" content="" />
+    <meta property="og:url" content="" />
+    
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="nowhere passport" />
+    <meta name="twitter:description" content="Explore the world with nowhere" />
+    <meta name="twitter:image" content="" />''',
+                            og_tags
+                        )
+                        
+                        return HTMLResponse(content=html_content, media_type="text/html")
+        except Exception as e:
+            print(f"Error fetching profile {profile_id} via Cloud Function: {e}")
+        
+        # If Cloud Function fetch fails or profile doesn't exist, serve template with default OG tags
         return FileResponse(profile_path, media_type="text/html")
     
-    # Fallback: fetch from Firestore and render inline
+    # Fallback if profile.html doesn't exist
+    raise HTTPException(status_code=404, detail="Profile page not found")
+
+# API endpoint to fetch user profile (proxies Cloud Function)
+@app.get("/api/profile/{profile_id}")
+async def api_get_profile(profile_id: str):
+    """
+    Proxy endpoint to fetch user profile from Cloud Function.
+    This prevents exposing the Cloud Function URL to the client
+    and avoids CORS/permission issues with direct Firestore access.
+    """
+    cloud_function_url = "https://us-central1-steps-d1514.cloudfunctions.net/getUserProfile"
+    
     try:
-        doc = db.collection("users").document(profile_id).get()
-        if not doc.exists:
-            raise HTTPException(status_code=404, detail="Profile not found")
-
-        u = doc.to_dict()
-        display = u.get("displayName", "nowhere traveler")
-        bio = u.get("bio", f"{display}'s travel passport")
-        og_image = u.get("ogImageUrl", f"{LINKS_DOMAIN}/static/og-default.png")
-        url = f"{LINKS_DOMAIN}/profile/{profile_id}"
-
-        html = f"""<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>{escape(display)} · nowhere</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-
-    <meta property="og:type" content="profile" />
-    <meta property="og:title" content="{escape(display)} · nowhere" />
-    <meta property="og:description" content="{escape(bio)}" />
-    <meta property="og:url" content="{url}" />
-    <meta property="og:image" content="{og_image}" />
-
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="{escape(display)} · nowhere" />
-    <meta name="twitter:description" content="{escape(bio)}" />
-    <meta name="twitter:image" content="{og_image}" />
-
-    <!-- App Links / Universal Links -->
-    <meta property="al:ios:url" content="nowhereapp://profile/{escape(profile_id)}" />
-    <meta property="al:ios:app_store_id" content="YOUR_APPSTORE_ID" />
-    <meta property="al:ios:app_name" content="nowhere" />
-  </head>
-  <body>
-    <h1>{escape(display)}</h1>
-    <p>{escape(bio)}</p>
-  </body>
-</html>"""
-        return HTMLResponse(content=html, media_type="text/html")
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(
+                cloud_function_url,
+                params={"id": profile_id}
+            )
+            
+            # Return the response from the Cloud Function
+            if response.status_code == 200:
+                return response.json()
+            else:
+                # Pass through error responses
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail=f"Cloud Function returned {response.status_code}"
+                )
+    
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Request timeout")
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=502, detail=f"Error calling Cloud Function: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-# Legacy /u/{user_id} endpoint - redirect to new /profile/{profile_id}
-@app.api_route("/u/{user_id}", methods=["GET", "HEAD"], response_class=HTMLResponse)
-def user_passport_legacy(user_id: str):
-    """Legacy endpoint - redirect to new profile URL"""
-    return RedirectResponse(url=f"{LINKS_DOMAIN}/profile/{user_id}", status_code=302)

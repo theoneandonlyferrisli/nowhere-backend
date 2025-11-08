@@ -26,21 +26,45 @@ The link server provides domain-based routing:
    - User avatar and display name
    - Travel stats (places, cities, countries)
    - "Open in App" deep link button
-   - Fetches user data from Firestore
+   - Fetches user data via backend API (proxies Cloud Function)
 
-3. **Legacy Redirect** (`/u/{user_id}`) - 301 redirects to `/profile/{user_id}`
+3. **Profile API Endpoint** (`/api/profile/{profile_id}`) - Backend API that:
+   - Proxies requests to the Cloud Function `getUserProfile`
+   - Prevents exposing Cloud Function URL to clients
+   - Handles authentication and permissions server-side
+   - Returns JSON profile data
+
+4. **Legacy Redirect** (`/u/{user_id}`) - 301 redirects to `/profile/{user_id}`
 
 4. **Error Page** (`/profile` without ID) - Beautiful error page matching design system
 
 5. **AASA File** - Same Universal Links configuration as root domain
 
+## Architecture
+
+### Profile Data Flow
+
+The profile fetching has been updated to use a secure backend API proxy pattern:
+
+1. **Client** (`profile.html`) → Makes request to `/api/profile/{profile_id}`
+2. **Backend API** (`main.py`) → Proxies request to Cloud Function with server credentials
+3. **Cloud Function** → Fetches data from Firestore and returns to backend
+4. **Backend** → Returns profile data to client
+
+**Benefits:**
+- Cloud Function URL not exposed to clients
+- No CORS or permission issues with direct Firestore access
+- Centralized authentication handling
+- User profiles don't need to be publicly readable
+
 ## Tech Stack
 
 - **FastAPI** - Modern Python web framework
 - **Uvicorn** - ASGI server
-- **Google Cloud Firestore** - User data storage
+- **httpx** - Async HTTP client for Cloud Function requests
+- **Google Cloud Firestore** - User data storage (via Cloud Function)
 - **Firebase Storage** - Image hosting for carousel
-- **Workload Identity** - Authenticates to Firestore via GKE service account
+- **Workload Identity** - Authenticates to GCP services via GKE service account
 
 ## Files
 
