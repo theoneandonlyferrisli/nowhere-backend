@@ -3,6 +3,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, Redirect
 from fastapi.staticfiles import StaticFiles
 from google.cloud import firestore
 from pathlib import Path
+import random
 
 app = FastAPI()
 
@@ -12,6 +13,25 @@ db = firestore.Client()
 
 LANDING_DOMAIN = "https://nowhereapp.ai"
 LINKS_DOMAIN = "https://links.nowhereapp.ai"
+
+# City configurations for random OG image
+CITY_IMAGES = [
+    {"path": "cities/new-york_new-york_us/featureImgsThumbnail", "count": 1},
+    {"path": "cities/dubai_dubayy_ae/featureImgsThumbnail", "count": 1},
+    {"path": "cities/paris_ile-de-france_fr/featureImgsThumbnail", "count": 1},
+    {"path": "cities/sydney_new-south-wales_au/featureImgsThumbnail", "count": 1},
+    {"path": "cities/shanghai_shanghai_cn/featureImgsThumbnail", "count": 1},
+]
+FIREBASE_BUCKET = "steps-d1514.firebasestorage.app"
+
+def get_random_og_image() -> str:
+    """Get a random thumbnail image URL for OG tags"""
+    city = random.choice(CITY_IMAGES)
+    img_num = random.randint(1, city["count"])
+    path = f"{city['path']}/{img_num}.jpg"
+    # URL encode the path
+    encoded_path = path.replace("/", "%2F")
+    return f"https://firebasestorage.googleapis.com/v0/b/{FIREBASE_BUCKET}/o/{encoded_path}?alt=media"
 
 # Mount static files directory
 static_dir = Path(__file__).parent / "static"
@@ -30,18 +50,47 @@ def get_host(request: Request) -> str:
     """Get the host from the request"""
     return request.headers.get("host", "").lower()
 
-@app.get("/", response_class=HTMLResponse)
+@app.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse)
 def landing(request: Request):
     host = get_host(request)
     
     # If accessed via links.nowhereapp.ai, redirect to landing domain
     if "links.nowhereapp.ai" in host:
-        return RedirectResponse(url=LANDING_DOMAIN, status_code=301)
+        return RedirectResponse(url=LANDING_DOMAIN, status_code=302)
     
-    # Serve carousel landing page for nowhereapp.ai
+    # Serve carousel landing page for nowhereapp.ai with dynamic OG tags
     index_path = static_dir / "index.html"
     if index_path.exists():
-        return FileResponse(index_path, media_type="text/html")
+        # Read the HTML file
+        html_content = index_path.read_text()
+        
+        # Get random OG image
+        og_image = get_random_og_image()
+        
+        # Inject OG meta tags after the viewport meta tag
+        og_tags = f"""
+    
+    <!-- Open Graph / Link Preview -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="{LANDING_DOMAIN}" />
+    <meta property="og:title" content="nowhere - Explore. Discover. Share." />
+    <meta property="og:description" content="Your personal places passport. Discover and share the world's most beautiful destinations." />
+    <meta property="og:image" content="{og_image}" />
+    
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="nowhere - Explore. Discover. Share." />
+    <meta name="twitter:description" content="Your personal places passport. Discover and share the world's most beautiful destinations." />
+    <meta name="twitter:image" content="{og_image}" />
+"""
+        
+        # Insert OG tags after the viewport meta tag
+        html_content = html_content.replace(
+            '<meta name="viewport" content="width=device-width, initial-scale=1.0">',
+            f'<meta name="viewport" content="width=device-width, initial-scale=1.0">{og_tags}'
+        )
+        
+        return HTMLResponse(content=html_content)
     
     # Fallback if index.html is missing
     return """<!doctype html>
@@ -57,7 +106,7 @@ def landing(request: Request):
   </body>
 </html>"""
 
-@app.get("/.well-known/apple-app-site-association")
+@app.api_route("/.well-known/apple-app-site-association", methods=["GET", "HEAD"])
 def aasa():
     # Serve the AASA file from static directory
     aasa_path = static_dir / ".well-known" / "apple-app-site-association"
@@ -82,7 +131,7 @@ def aasa():
     return JSONResponse(content=payload, media_type="application/json")
 
 # Error page for invalid profile access
-@app.get("/profile", response_class=HTMLResponse)
+@app.api_route("/profile", methods=["GET", "HEAD"], response_class=HTMLResponse)
 def profile_no_id():
     error_path = static_dir / "error.html"
     if error_path.exists():
@@ -130,7 +179,7 @@ def profile_no_id():
         media_type="text/html"
     )
 
-@app.get("/profile/{profile_id}", response_class=HTMLResponse)
+@app.api_route("/profile/{profile_id}", methods=["GET", "HEAD"], response_class=HTMLResponse)
 def user_profile(profile_id: str):
     """Serve user profile page"""
     profile_path = static_dir / "profile.html"
@@ -182,7 +231,7 @@ def user_profile(profile_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 # Legacy /u/{user_id} endpoint - redirect to new /profile/{profile_id}
-@app.get("/u/{user_id}", response_class=HTMLResponse)
+@app.api_route("/u/{user_id}", methods=["GET", "HEAD"], response_class=HTMLResponse)
 def user_passport_legacy(user_id: str):
     """Legacy endpoint - redirect to new profile URL"""
-    return RedirectResponse(url=f"{LINKS_DOMAIN}/profile/{user_id}", status_code=301)
+    return RedirectResponse(url=f"{LINKS_DOMAIN}/profile/{user_id}", status_code=302)

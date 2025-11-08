@@ -16,6 +16,6 @@ spec:
     spec:
       containers:
         - name: link-server
-          image: us-central1-docker.pkg.dev/nowhere-link-prod/nowhere-link-repo/link-server:2025.11.1
+          image: us-central1-docker.pkg.dev/nowhere-link-prod/nowhere-link-repo/link-server:2025.11.5
           ports:
             - containerPort: 8080
