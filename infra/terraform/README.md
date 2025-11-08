@@ -7,8 +7,11 @@ This directory contains Terraform configuration for the Nowhere link server infr
 - **GKE Autopilot Cluster** (`nowhere-link-autopilot`) - Managed Kubernetes cluster in `us-central1`
 - **Cloud DNS Zone** (`nowhereapp-ai-zone`) - Managed DNS for `nowhereapp.ai`
 - **Global Static IP** (`links-nowhereapp-ip`) - Static IP for the load balancer
-- **DNS A Record** - `links.nowhereapp.ai` → static IP
-- **Enabled APIs** - Container, Compute, DNS APIs
+- **DNS A Records**:
+  - `links.nowhereapp.ai` → static IP (for user profiles)
+  - `nowhereapp.ai` → static IP (for landing page)
+- **Artifact Registry Cleanup Policy** - Auto-deletes old Docker images (>90 days, keeps min 5)
+- **Enabled APIs** - Container, Compute, DNS, Artifact Registry APIs
 
 ## Initial Setup
 

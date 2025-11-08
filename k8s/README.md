@@ -1,13 +1,15 @@
 # Kubernetes Manifests
 
-Kubernetes resources for deploying the link server to GKE Autopilot.
+Kubernetes resources for deploying the link server to GKE Autopilot with dual-domain support.
 
 ## Resources
 
-- **deployment.yaml** - Link server deployment (2 replicas)
+- **deployment.yaml** - Link server deployment (2 replicas, currently version 2025.11.1)
 - **service.yaml** - NodePort service exposing pods
-- **managed-cert.yaml** - Google-managed TLS certificate for `links.nowhereapp.ai`
-- **ingress.yaml** - GCE Ingress with HTTPS load balancer, static IP, and TLS
+- **managed-cert.yaml** - Google-managed TLS certificate for both domains:
+  - `links.nowhereapp.ai`
+  - `nowhereapp.ai`
+- **ingress.yaml** - GCE Ingress with HTTPS load balancer routing both domains to link-server service
 
 ## Prerequisites
 
@@ -35,7 +37,7 @@ kubectl apply -f managed-cert.yaml
 kubectl apply -f ingress.yaml
 ```
 
-**Note:** The ManagedCertificate can take 10-30 minutes to provision after deployment.
+**Note:** The ManagedCertificate can take up to 24 hours to provision after deployment. `links.nowhereapp.ai` will provision faster than `nowhereapp.ai` since it's been active longer.
 
 ## Common Operations
 
@@ -58,9 +60,9 @@ kubectl get all
 # Get ingress details (IP address)
 kubectl get ingress link-server-ingress
 
-# Check certificate status (should show "Active")
+# Check certificate status (should show "Active" for both domains)
 kubectl get managedcertificate
-kubectl describe managedcertificate links-nowhereapp-cert
+kubectl get managedcertificate links-nowhereapp-cert -o jsonpath='{.status.domainStatus}' | python3 -m json.tool
 ```
 
 ### Update Deployment After Code Changes
@@ -68,12 +70,9 @@ kubectl describe managedcertificate links-nowhereapp-cert
 After building and pushing a new Docker image:
 
 ```bash
-# Restart deployment (pulls latest :v1 tag)
-kubectl rollout restart deployment/link-server
-
-# Or update to a specific version
-kubectl set image deployment/link-server \
-  link-server=us-central1-docker.pkg.dev/nowhere-link-prod/nowhere-link-repo/link-server:v2
+# Edit deployment.yaml to use new version tag (e.g., 2025.11.2)
+# Then apply:
+kubectl apply -f deployment.yaml
 
 # Watch rollout progress
 kubectl rollout status deployment/link-server

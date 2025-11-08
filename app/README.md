@@ -1,69 +1,119 @@
 # Link Server Application
 
-FastAPI application serving the Nowhere link server with Universal Links support, Open Graph previews, and a landing page.
+FastAPI application serving the Nowhere link server with dual-domain architecture, Universal Links, and beautiful UI.
 
 ## What It Does
 
-The link server provides:
+The link server provides domain-based routing:
 
-1. **Landing Page** (`/`) - Marketing page with Open Graph metadata
-2. **Apple App Site Association** (`/.well-known/apple-app-site-association`) - Universal Links configuration for iOS deep linking
-3. **User Passport Pages** (`/u/{user_id}`) - Dynamic user profile pages with:
-   - Open Graph meta tags for rich link previews (iMessage, Twitter, Instagram, etc.)
-   - Twitter Card metadata
-   - App Links metadata for iOS Universal Links
-   - Fetches user data from Firestore (`users/{user_id}` collection)
+### **nowhereapp.ai** (Landing Page Domain)
+
+1. **Landing Page** (`/`) - Full-screen carousel with glassmorphism overlay featuring:
+   - Dynamic image carousel from Firebase Storage (5 cities: NYC, Dubai, Paris, Sydney, Shanghai)
+   - iOS 18-style liquid glass effect overlay
+   - Responsive design with smooth transitions
+   - Configurable via `static/config.js`
+
+2. **Apple App Site Association** (`/.well-known/apple-app-site-association`) - Universal Links configuration:
+   - App ID: `G5Q9BF9HW9.com.AceKingLLC.Steps`
+   - Path matching for all routes
+
+### **links.nowhereapp.ai** (Profile Domain)
+
+1. **Root Redirect** (`/`) - Automatically redirects to `nowhereapp.ai`
+
+2. **User Profile Pages** (`/profile/{profile_id}`) - Liquid glass UI profile pages with:
+   - User avatar and display name
+   - Travel stats (places, cities, countries)
+   - "Open in App" deep link button
+   - Fetches user data from Firestore
+
+3. **Legacy Redirect** (`/u/{user_id}`) - 301 redirects to `/profile/{user_id}`
+
+4. **Error Page** (`/profile` without ID) - Beautiful error page matching design system
+
+5. **AASA File** - Same Universal Links configuration as root domain
 
 ## Tech Stack
 
 - **FastAPI** - Modern Python web framework
 - **Uvicorn** - ASGI server
 - **Google Cloud Firestore** - User data storage
+- **Firebase Storage** - Image hosting for carousel
 - **Workload Identity** - Authenticates to Firestore via GKE service account
 
 ## Files
 
-- `main.py` - FastAPI application with all endpoints
+- `main.py` - FastAPI application with domain-based routing logic
 - `Dockerfile` - Container image definition
-- `static/og-default.png` - Placeholder Open Graph image (replace with actual image)
+- `static/index.html` - Carousel landing page
+- `static/config.js` - Landing page configuration (Firebase URLs, carousel settings)
+- `static/profile.html` - User profile page template
+- `static/error.html` - Error page for invalid profile access
+- `static/.well-known/apple-app-site-association` - AASA file for Universal Links
 
 ## Local Development
 
 ```bash
 # Install dependencies
-pip install fastapi uvicorn[standard] google-cloud-firestore
+pip install -r requirements.txt
 
 # Run locally (requires Firestore credentials)
 uvicorn main:app --reload --port 8080
 ```
 
+### Landing Page Configuration
+
+Edit `static/config.js` to customize:
+- App name and tagline
+- Firebase Storage bucket
+- Multiple city image folders
+- Maximum photos to display
+- Carousel shuffle and transition timing
+- Debug mode
+
+```javascript
+const CONFIG = {
+    APP_NAME: 'nowhere',
+    APP_TAGLINE: 'Explore. Discover. Share.',
+    FIREBASE_BUCKET: 'steps-d1514.firebasestorage.app',
+    
+    // Add multiple city folders with image counts
+    CITY_IMAGES: [
+        {
+            path: 'cities/new-york_new-york_us/featureImgsFullRes',
+            count: 5
+        },
+        {
+            path: 'cities/tokyo_tokyo_jp/featureImgsFullRes',
+            count: 3
+        }
+    ],
+    
+    CAROUSEL: {
+        MAX_PHOTOS: 10,            // Max photos to show
+        TRANSITION_DURATION: 5000,
+        PRELOAD_NEXT: true,
+        SHUFFLE: true              // Randomize images from different cities
+    }
+};
+```
+
 ## Building & Deploying
 
-### Build and Push Image (Cloud Build - Recommended)
+### Build and Push Image (Cloud Build - Required)
+
+**Note:** Local Docker is not installed. Always use Cloud Build.
 
 ```bash
 cd app
 
-# Build using Cloud Build (no local Docker needed)
+# Build using Cloud Build with YYYY.MM.N version format
 gcloud builds submit \
-  --tag us-central1-docker.pkg.dev/nowhere-link-prod/nowhere-link-repo/link-server:v1 \
-  --project=nowhere-link-prod
+  --tag us-central1-docker.pkg.dev/nowhere-link-prod/nowhere-link-repo/link-server:2025.11.1
 ```
 
-### Build Locally (Alternative)
-
-```bash
-cd app
-
-# Configure Docker auth
-gcloud auth configure-docker us-central1-docker.pkg.dev
-
-# Build image
-docker build -t us-central1-docker.pkg.dev/nowhere-link-prod/nowhere-link-repo/link-server:v1 .
-
-# Push image
-docker push us-central1-docker.pkg.dev/nowhere-link-prod/nowhere-link-repo/link-server:v1
-```
+**Versioning:** Use `YYYY.MM.N` format (e.g., 2025.11.1 for first version in November 2025)
 
 ### Deploy to Kubernetes
 
@@ -71,30 +121,58 @@ After building a new image, update the deployment:
 
 ```bash
 cd ../k8s
-kubectl rollout restart deployment/link-server
+
+# Edit deployment.yaml to use new version
+# Then apply:
+kubectl apply -f deployment.yaml
+
+# Monitor rollout
+kubectl rollout status deployment/link-server
 ```
 
-Or update with a new version tag:
-```bash
-kubectl set image deployment/link-server \
-  link-server=us-central1-docker.pkg.dev/nowhere-link-prod/nowhere-link-repo/link-server:v2
-```
+## Configuration & Customization
 
-## Customization
+### Firebase Storage Images
+
+The landing page carousel loads images from multiple city folders in Firebase Storage. To configure:
+
+1. **Update `static/config.js`** with your Firebase Storage bucket and city paths:
+   ```javascript
+   CITY_IMAGES: [
+       {
+           path: 'cities/new-york_new-york_us/featureImgsFullRes',
+           count: 5  // Number of images (1.jpg through 5.jpg)
+       },
+       {
+           path: 'cities/paris_ile-de-france_fr/featureImgsFullRes',
+           count: 4
+       }
+   ]
+   ```
+
+2. **Set up Firebase Storage permissions**:
+   - For public access, set Firebase Storage rules to allow read
+   - Images must be accessible via public URLs
+   - Images are automatically loaded from all configured city folders
+
+3. **Image naming**: Images should be numbered sequentially (1.jpg, 2.jpg, etc.) in each city's `featureImgsFullRes` folder
+
+4. **Carousel behavior**:
+   - Images from all cities are combined
+   - Optionally shuffled for variety
+   - Limited to `MAX_PHOTOS` setting
+   - Smooth transitions with preloading
 
 ### Update AASA Configuration
 
-Edit `main.py` and update the AASA endpoint with your real Team ID and bundle identifier:
+The AASA file is located at `static/.well-known/apple-app-site-association`. Current configuration:
+- App ID: `G5Q9BF9HW9.com.AceKingLLC.Steps`
+- Paths: All routes (`*`)
+- Web credentials enabled
 
-```python
-"appIDs": ["TEAMID.com.nowhereapp.ios"]
-```
+To update, edit the JSON file directly or update the fallback in `main.py`.
 
 After changes, rebuild and redeploy.
-
-### Update Open Graph Images
-
-Replace `static/og-default.png` with your actual Open Graph image (recommended: 1200x630px).
 
 ### User Data Schema
 
@@ -107,14 +185,28 @@ The `/u/{user_id}` endpoint expects Firestore documents at `users/{user_id}` wit
 
 ```bash
 # Test landing page
-curl http://links.nowhereapp.ai/
+curl http://localhost:8080/
 
 # Test AASA
-curl https://links.nowhereapp.ai/.well-known/apple-app-site-association
+curl http://localhost:8080/.well-known/apple-app-site-association
 
 # Test user profile
-curl https://links.nowhereapp.ai/u/testuser
+curl http://localhost:8080/u/testuser
 
 # Validate OG tags
-curl -s https://links.nowhereapp.ai/u/testuser | grep "og:"
+curl -s http://localhost:8080/u/testuser | grep "og:"
+
+# View landing page in browser
+open http://localhost:8080/
+```
+
+### Firebase Storage Permissions
+
+If carousel images don't load, check Firebase Storage permissions:
+
+```bash
+# Images should be accessible at URLs like:
+# https://firebasestorage.googleapis.com/v0/b/steps-d1514.firebasestorage.app/o/cities%2Fnew-york_new-york_us%2FfeatureImgsFullRes%2F1.jpg?alt=media
+
+# To make images public, update Firebase Storage rules in the Firebase Console
 ```

@@ -1,13 +1,14 @@
 # Nowhere Link Server
 
-**Production link server for Nowhere app** - Handles Universal Links (iOS deep linking), Open Graph previews, and user passport pages at `links.nowhereapp.ai`.
+**Production link server for Nowhere app** - Handles Universal Links (iOS deep linking), landing page, and user profile pages across dual domains.
 
 ## What This Is
 
 A FastAPI-based link server running on GKE that provides:
+- **Landing Page** (`nowhereapp.ai`) - Beautiful carousel showcasing cities from Firebase Storage
 - **Universal Links** - Seamless iOS app deep linking via AASA (Apple App Site Association)
-- **Rich Link Previews** - Open Graph metadata for iMessage, Twitter, Instagram, etc.
-- **User Passports** - Shareable user profile pages that open in the app when installed
+- **User Profiles** (`links.nowhereapp.ai/profile/{id}`) - Shareable profile pages with liquid glass UI
+- **Smart Redirects** - Domain-based routing (links.nowhereapp.ai → nowhereapp.ai for root access)
 
 ## Project Structure
 
@@ -43,11 +44,11 @@ nowhere-backend/
 
 2. **Update DNS** - Point `nowhereapp.ai` nameservers to Cloud DNS (from Terraform output)
 
-3. **Build & Push Image**
+3. **Build & Push Image** (using Cloud Build, no local Docker needed)
    ```bash
    cd app
    gcloud builds submit \
-     --tag us-central1-docker.pkg.dev/nowhere-link-prod/nowhere-link-repo/link-server:v1 \
+     --tag us-central1-docker.pkg.dev/nowhere-link-prod/nowhere-link-repo/link-server:2025.11.1
      --project=nowhere-link-prod
    ```
 
@@ -66,18 +67,18 @@ nowhere-backend/
    # Modify app/main.py with your changes
    ```
 
-2. **Build New Image**
+2. **Build New Image** (increment version: 2025.11.2, 2025.11.3, etc.)
    ```bash
    cd app
    gcloud builds submit \
-     --tag us-central1-docker.pkg.dev/nowhere-link-prod/nowhere-link-repo/link-server:v1 \
-     --project=nowhere-link-prod
+     --tag us-central1-docker.pkg.dev/nowhere-link-prod/nowhere-link-repo/link-server:2025.11.2
    ```
 
-3. **Deploy Changes**
+3. **Update Deployment**
    ```bash
    cd ../k8s
-   kubectl rollout restart deployment/link-server
+   # Edit deployment.yaml to use new version tag
+   kubectl apply -f deployment.yaml
    ```
 
 4. **Verify Deployment**
@@ -85,6 +86,15 @@ nowhere-backend/
    kubectl rollout status deployment/link-server
    kubectl get pods
    ```
+
+### Versioning Format
+
+Use `YYYY.MM.N` format (e.g., 2025.11.1, 2025.11.2):
+- First number: Year (2025)
+- Second number: Month (11 = November)
+- Third number: Incremental version within that month (1, 2, 3...)
+
+Old versions are automatically cleaned up after 90 days (minimum 5 versions kept).
 
 ### Update Infrastructure
 

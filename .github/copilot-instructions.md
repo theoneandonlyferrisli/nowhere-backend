@@ -88,11 +88,18 @@ This project has comprehensive documentation organized hierarchically:
 - Document new endpoints with their purpose and response format
 - Update build/deploy commands if Docker or dependencies change
 - Add testing examples for new functionality
+- **Use GCP Cloud Build** for Docker image builds (no local Docker installed)
+
+### Build & Deploy
+- Use Cloud Build to build Docker images: `gcloud builds submit --tag IMAGE_URL`
+- Version format: YYYY.MM.N (e.g., 2025.11.1)
+- Never use local `docker build` commands
 
 ### Kubernetes Changes
 - Document new manifests and their purpose
 - Update deployment workflow if order or process changes
 - Add troubleshooting for common issues with the new config
+- **kubectl path**: Use `/opt/homebrew/share/google-cloud-sdk/bin/kubectl` (installed via gcloud)
 
 ### Configuration Changes
 - Document what the config controls

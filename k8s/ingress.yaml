@@ -8,6 +8,16 @@ metadata:
     kubernetes.io/ingress.global-static-ip-name: "links-nowhereapp-ip"
 spec:
   rules:
+    - host: nowhereapp.ai
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: link-server-svc
+                port:
+                  number: 80
     - host: links.nowhereapp.ai
       http:
         paths:

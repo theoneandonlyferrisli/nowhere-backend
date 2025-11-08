@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title id="page-title">nowhere - Explore. Discover. Share.</title>
+    
+    <!-- Preconnect to Firebase Storage -->
+    <link rel="preconnect" href="https://firebasestorage.googleapis.com">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            overflow-x: hidden;
+            background: #000;
+        }
+        
+        /* Full-screen carousel container */
+        .carousel-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            z-index: 1;
+        }
+        
+        /* Carousel slides */
+        .carousel-slide {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            transition: opacity 1s ease-in-out;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+        
+        .carousel-slide.active {
+            opacity: 1;
+            z-index: 2;
+        }
+        
+        /* Glassmorphism overlay with iOS 18 liquid glass effect */
+        .glass-overlay {
+            position: fixed;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+            padding: 32px 48px;
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(40px) saturate(180%);
+            -webkit-backdrop-filter: blur(40px) saturate(180%);
+            border-radius: 32px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 
+                0 8px 32px 0 rgba(0, 0, 0, 0.37),
+                inset 0 1px 0 0 rgba(255, 255, 255, 0.5),
+                0 1px 40px 0 rgba(255, 255, 255, 0.1);
+            max-width: 90%;
+            text-align: center;
+            animation: float 6s ease-in-out infinite;
+        }
+        
+        @keyframes float {
+            0%, 100% {
+                transform: translateX(-50%) translateY(0px);
+            }
+            50% {
+                transform: translateX(-50%) translateY(-10px);
+            }
+        }
+        
+        .glass-overlay h1 {
+            font-size: clamp(2rem, 5vw, 4rem);
+            font-weight: 700;
+            color: #ffffff;
+            margin-bottom: 12px;
+            text-shadow: 0 2px 20px rgba(0, 0, 0, 0.3);
+            letter-spacing: -0.02em;
+        }
+        
+        .glass-overlay p {
+            font-size: clamp(1rem, 2vw, 1.5rem);
+            font-weight: 400;
+            color: rgba(255, 255, 255, 0.9);
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        }
+        
+        /* Loading spinner */
+        .loading-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #000;
+            z-index: 100;
+            transition: opacity 0.5s ease-out;
+        }
+        
+        .loading-container.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Navigation dots */
+        .carousel-dots {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 9;
+            display: flex;
+            gap: 10px;
+        }
+        
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.4);
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .dot.active {
+            background: rgba(255, 255, 255, 0.9);
+            width: 24px;
+            border-radius: 4px;
+        }
+        
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .glass-overlay {
+                bottom: 20px;
+                padding: 24px 32px;
+                border-radius: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div class="loading-container" id="loading">
+        <div class="spinner"></div>
+    </div>
+    
+    <!-- Carousel Container -->
+    <div class="carousel-container" id="carousel">
+        <!-- Slides will be dynamically inserted here -->
+    </div>
+    
+    <!-- Navigation Dots -->
+    <div class="carousel-dots" id="dots">
+        <!-- Dots will be dynamically inserted here -->
+    </div>
+    
+    <!-- Glass Overlay with App Info -->
+    <div class="glass-overlay">
+        <h1 id="app-name">nowhere</h1>
+        <p id="app-tagline">Explore. Discover. Share.</p>
+    </div>
+    
+    <!-- Configuration -->
+    <script src="/static/config.js"></script>
+    
+    <script>
+        const FALLBACK_BACKGROUNDS = [
+            'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            'linear-gradient(135deg, #f6d365 0%, #fda085 100%)',
+            'linear-gradient(135deg, #43cea2 0%, #185a9d 100%)'
+        ];
+        const DEFAULT_FALLBACK_SLIDES = () => FALLBACK_BACKGROUNDS.map(bg => ({
+            mode: 'fallback',
+            fallback: bg
+        }));
+        
+        // Set page title and app info from config
+        document.getElementById('page-title').textContent = `${CONFIG.APP_NAME} - ${CONFIG.APP_TAGLINE}`;
+        document.getElementById('app-name').textContent = CONFIG.APP_NAME;
+        document.getElementById('app-tagline').textContent = CONFIG.APP_TAGLINE;
+        
+        // Utility function to log only in debug mode
+        function debugLog(...args) {
+            if (CONFIG.FEATURES.DEBUG_MODE) {
+                console.log(...args);
+            }
+        }
+        
+        // Function to build Firebase Storage URL
+        function getFirebaseStorageUrl(bucket, path, filename) {
+            // Encode the path for URL
+            const encodedPath = encodeURIComponent(`${path}/${filename}`);
+            return `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodedPath}?alt=media`;
+        }
+        
+        // Function to collect all image URLs from multiple city folders
+        function getAllImageUrls() {
+            const allUrls = [];
+            
+            CONFIG.CITY_IMAGES.forEach(city => {
+                for (let i = 1; i <= city.count; i++) {
+                    const url = getFirebaseStorageUrl(CONFIG.FIREBASE_BUCKET, city.path, `${i}.jpg`);
+                    allUrls.push(url);
+                }
+            });
+            
+            // Shuffle if enabled
+            if (CONFIG.CAROUSEL.SHUFFLE) {
+                for (let i = allUrls.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [allUrls[i], allUrls[j]] = [allUrls[j], allUrls[i]];
+                }
+            }
+            
+            // Limit to MAX_PHOTOS
+            return allUrls.slice(0, CONFIG.CAROUSEL.MAX_PHOTOS);
+        }
+
+        function getFallbackBackground(index) {
+            return FALLBACK_BACKGROUNDS[index % FALLBACK_BACKGROUNDS.length];
+        }
+        
+        // Function to preload image
+        function preloadImage(url) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => resolve(url);
+                img.onerror = () => reject(new Error(`Failed to load image: ${url}`));
+                img.src = url;
+            });
+        }
+        
+        // Render slides and update UI
+        function renderSlides(slidesData) {
+            if (!Array.isArray(slidesData) || !slidesData.length) {
+                return false;
+            }
+            
+            slides = slidesData.map(slide => ({ ...slide }));
+            currentSlide = 0;
+            
+            if (autoplayInterval) {
+                clearInterval(autoplayInterval);
+                autoplayInterval = null;
+            }
+            
+            const carouselContainer = document.getElementById('carousel');
+            const dotsContainer = document.getElementById('dots');
+            
+            carouselContainer.innerHTML = '';
+            dotsContainer.innerHTML = '';
+            
+            slides.forEach((slideData, index) => {
+                const slide = createSlide(slideData, index);
+                carouselContainer.appendChild(slide);
+                
+                const dot = createDot(index);
+                dotsContainer.appendChild(dot);
+            });
+            
+            const loading = document.getElementById('loading');
+            loading.classList.add('hidden');
+            
+            startAutoplay();
+            return true;
+        }
+        
+        // Carousel state
+        let currentSlide = 0;
+        let slides = [];
+        let autoplayInterval = null;
+        
+        // Function to create slide element
+        function createSlide(slideData, index) {
+            const slide = document.createElement('div');
+            slide.className = 'carousel-slide';
+            if (slideData.mode === 'image') {
+                const backgrounds = [];
+                if (slideData.url) {
+                    backgrounds.push(`url(${slideData.url})`);
+                }
+                if (slideData.fallback) {
+                    backgrounds.push(slideData.fallback);
+                }
+                slide.style.backgroundImage = backgrounds.join(', ');
+                if (slideData.status === 'failed') {
+                    slide.setAttribute('data-image-status', 'fallback');
+                }
+            } else {
+                slide.style.backgroundImage = slideData.fallback;
+            }
+            if (index === 0) {
+                slide.classList.add('active');
+            }
+            return slide;
+        }
+        
+        // Function to create dot element
+        function createDot(index) {
+            const dot = document.createElement('div');
+            dot.className = 'dot';
+            if (index === 0) {
+                dot.classList.add('active');
+            }
+            dot.addEventListener('click', () => goToSlide(index));
+            return dot;
+        }
+        
+        // Function to go to specific slide
+        function goToSlide(index) {
+            const allSlides = document.querySelectorAll('.carousel-slide');
+            const allDots = document.querySelectorAll('.dot');
+            
+            // Remove active class from current slide
+            allSlides[currentSlide].classList.remove('active');
+            allDots[currentSlide].classList.remove('active');
+            
+            // Add active class to new slide
+            currentSlide = index;
+            allSlides[currentSlide].classList.add('active');
+            allDots[currentSlide].classList.add('active');
+            
+            // Preload next image if enabled
+            if (CONFIG.CAROUSEL.PRELOAD_NEXT) {
+                const nextIndex = (currentSlide + 1) % slides.length;
+                const nextSlideData = slides[nextIndex];
+                if (nextSlideData?.mode === 'image' && nextSlideData.url) {
+                    preloadImage(nextSlideData.url).catch(err => debugLog('Failed to preload next image', err));
+                }
+            }
+        }
+        
+        // Function to go to next slide
+        function nextSlide() {
+            const nextIndex = (currentSlide + 1) % slides.length;
+            goToSlide(nextIndex);
+        }
+        
+        // Function to start autoplay
+        function startAutoplay() {
+            if (autoplayInterval) {
+                clearInterval(autoplayInterval);
+            }
+            if (slides.length <= 1) {
+                return;
+            }
+            autoplayInterval = setInterval(nextSlide, CONFIG.CAROUSEL.TRANSITION_DURATION);
+        }
+        
+        // Function to initialize carousel
+        async function initCarousel() {
+            try {
+                debugLog('Initializing carousel...');
+                
+                // Get all image URLs from configured city folders
+                if (!CONFIG.CITY_IMAGES || CONFIG.CITY_IMAGES.length === 0) {
+                    debugLog('No carousel images configured; using fallbacks');
+                    renderSlides(DEFAULT_FALLBACK_SLIDES());
+                    return;
+                }
+
+                const imageUrls = getAllImageUrls();
+                
+                if (imageUrls.length === 0) {
+                    debugLog('No images available; using fallbacks');
+                    renderSlides(DEFAULT_FALLBACK_SLIDES());
+                    return;
+                }
+                
+                debugLog('Image URLs:', imageUrls);
+                
+                // Preload all images and capture status
+                const preloadPromises = imageUrls.map((url, index) =>
+                    preloadImage(url)
+                        .then(() => ({
+                            mode: 'image',
+                            url,
+                            fallback: getFallbackBackground(index),
+                            status: 'loaded'
+                        }))
+                        .catch(error => {
+                            console.warn(`Carousel image failed to preload: ${url}`, error);
+                            return {
+                                mode: 'image',
+                                url,
+                                fallback: getFallbackBackground(index),
+                                status: 'failed'
+                            };
+                        })
+                );
+
+                const slidesData = await Promise.all(preloadPromises);
+
+                const hasLoadedImage = slidesData.some(slide => slide.status === 'loaded');
+                if (!hasLoadedImage) {
+                    console.warn('All carousel images failed to preload. Verify that images in Firebase Storage are publicly accessible.');
+                }
+
+                renderSlides(slidesData);
+                debugLog('Carousel initialized successfully');
+                
+            } catch (error) {
+                console.error('Error initializing carousel:', error);
+                
+                const renderedFallback = renderSlides(DEFAULT_FALLBACK_SLIDES());
+
+                if (!renderedFallback) {
+                    // Show error in loading screen as a last resort
+                    const loading = document.getElementById('loading');
+                    loading.innerHTML = `
+                        <div style="text-align: center; color: white;">
+                            <p style="font-size: 1.2rem; margin-bottom: 10px;">Failed to load images</p>
+                            <p style="font-size: 0.9rem; opacity: 0.7;">Please check your connection and refresh</p>
+                        </div>
+                    `;
+                }
+            }
+        }
+        
+        // Pause autoplay when page is hidden
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                if (autoplayInterval) {
+                    clearInterval(autoplayInterval);
+                }
+            } else {
+                startAutoplay();
+            }
+        });
+        
+        // Initialize on load
+        window.addEventListener('load', initCarousel);
+    </script>
+</body>
+</html>

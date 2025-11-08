@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title id="page-title">nowhere</title>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-center;
+            padding: 20px;
+        }
+        
+        .profile-container {
+            max-width: 600px;
+            width: 100%;
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(40px) saturate(180%);
+            -webkit-backdrop-filter: blur(40px) saturate(180%);
+            border-radius: 32px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 
+                0 8px 32px 0 rgba(0, 0, 0, 0.37),
+                inset 0 1px 0 0 rgba(255, 255, 255, 0.5),
+                0 1px 40px 0 rgba(255, 255, 255, 0.1);
+            padding: 48px;
+            text-align: center;
+            animation: float 6s ease-in-out infinite;
+        }
+        
+        @keyframes float {
+            0%, 100% {
+                transform: translateY(0px);
+            }
+            50% {
+                transform: translateY(-10px);
+            }
+        }
+        
+        .profile-avatar {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            margin: 0 auto 24px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 3px solid rgba(255, 255, 255, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 48px;
+            color: rgba(255, 255, 255, 0.9);
+            font-weight: 600;
+        }
+        
+        h1 {
+            font-size: clamp(2rem, 4vw, 3rem);
+            font-weight: 700;
+            color: #ffffff;
+            margin-bottom: 16px;
+            text-shadow: 0 2px 20px rgba(0, 0, 0, 0.3);
+            letter-spacing: -0.02em;
+        }
+        
+        .bio {
+            font-size: clamp(1rem, 2vw, 1.25rem);
+            color: rgba(255, 255, 255, 0.9);
+            line-height: 1.6;
+            margin-bottom: 32px;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        }
+        
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            gap: 24px;
+            margin-bottom: 32px;
+        }
+        
+        .stat {
+            flex: 1;
+        }
+        
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #ffffff;
+            display: block;
+            margin-bottom: 8px;
+        }
+        
+        .stat-label {
+            font-size: 0.875rem;
+            color: rgba(255, 255, 255, 0.8);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        .cta-button {
+            display: inline-block;
+            padding: 16px 32px;
+            background: rgba(255, 255, 255, 0.25);
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            border-radius: 16px;
+            color: white;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+        
+        .cta-button:hover {
+            background: rgba(255, 255, 255, 0.35);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        }
+        
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            color: rgba(255, 255, 255, 0.8);
+        }
+        
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 3px solid rgba(255, 255, 255, 0.2);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        @media (max-width: 768px) {
+            .profile-container {
+                padding: 32px 24px;
+            }
+            
+            .stats {
+                flex-direction: column;
+                gap: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="profile-container">
+        <div id="loading-state" class="loading">
+            <div class="spinner"></div>
+            <span>Loading profile...</span>
+        </div>
+        
+        <div id="profile-content" style="display: none;">
+            <div class="profile-avatar" id="avatar">
+                <!-- Avatar will be dynamically inserted -->
+            </div>
+            
+            <h1 id="display-name">nowhere traveler</h1>
+            <p class="bio" id="bio">Exploring the world, one place at a time.</p>
+            
+            <div class="stats">
+                <div class="stat">
+                    <span class="stat-value" id="places-count">0</span>
+                    <span class="stat-label">Places</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-value" id="cities-count">0</span>
+                    <span class="stat-label">Cities</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-value" id="countries-count">0</span>
+                    <span class="stat-label">Countries</span>
+                </div>
+            </div>
+            
+            <a href="nowhereapp://open" class="cta-button">Open in App</a>
+        </div>
+    </div>
+    
+    <script>
+        // Extract profile ID from URL
+        const pathParts = window.location.pathname.split('/');
+        const profileId = pathParts[pathParts.length - 1];
+        
+        // Fetch profile data from Firestore (via API endpoint)
+        async function loadProfile() {
+            try {
+                // For now, just show placeholder data
+                // In production, fetch from: /api/profile/${profileId}
+                
+                setTimeout(() => {
+                    // Placeholder data
+                    document.getElementById('display-name').textContent = 'nowhere traveler';
+                    document.getElementById('bio').textContent = 'Exploring the world, one place at a time.';
+                    document.getElementById('avatar').textContent = '🌍';
+                    document.getElementById('places-count').textContent = '42';
+                    document.getElementById('cities-count').textContent = '12';
+                    document.getElementById('countries-count').textContent = '5';
+                    
+                    // Update page title
+                    document.title = 'nowhere traveler · nowhere';
+                    
+                    // Show content
+                    document.getElementById('loading-state').style.display = 'none';
+                    document.getElementById('profile-content').style.display = 'block';
+                }, 500);
+                
+            } catch (error) {
+                console.error('Failed to load profile:', error);
+                document.getElementById('loading-state').innerHTML = '<p>Failed to load profile</p>';
+            }
+        }
+        
+        // Load profile on page load
+        window.addEventListener('load', loadProfile);
+    </script>
+</body>
+</html>
